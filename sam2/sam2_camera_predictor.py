@@ -49,7 +49,6 @@ class SAM2CameraPredictor(SAM2Base):
         if isinstance(img, np.ndarray):
             img_np = img
             img_np = cv2.resize(img_np, (image_size, image_size)) / 255.0
-            print("mean ", img_np.mean())
             height, width = img.shape[:2]
         else:
             img_np = (
@@ -57,9 +56,7 @@ class SAM2CameraPredictor(SAM2Base):
             )
             width, height = img.size
         img = torch.from_numpy(img_np).permute(2, 0, 1).float()
-        print(img.type())
 
-        print(img.shape)
         img_mean = torch.tensor(img_mean, dtype=torch.float32)[:, None, None]
         img_std = torch.tensor(img_std, dtype=torch.float32)[:, None, None]
         img -= img_mean
@@ -73,12 +70,10 @@ class SAM2CameraPredictor(SAM2Base):
             offload_video_to_cpu=False, offload_state_to_cpu=False
         )
         img, width, height = self.perpare_data(img, image_size=self.image_size)
-        print(img.shape)
         self.condition_state["images"] = [img]
         self.condition_state["num_frames"] = len(img)
         self.condition_state["video_height"] = height
         self.condition_state["video_width"] = width
-        print("load_first_frame", self.condition_state["num_frames"])
         self._get_image_feature(frame_idx=0, batch_size=1)
 
     def add_conditioning_frame(self, img):
@@ -263,7 +258,6 @@ class SAM2CameraPredictor(SAM2Base):
             prev_sam_mask_logits = prev_out["pred_masks"].cuda(non_blocking=True)
             # Clamp the scale of prev_sam_mask_logits to avoid rare numerical issues.
             prev_sam_mask_logits = torch.clamp(prev_sam_mask_logits, -32.0, 32.0)
-        print("set pt ", obj_output_dict)
         current_out, _ = self._run_single_frame_inference(
             output_dict=obj_output_dict,  # run on the slice of a single object
             frame_idx=frame_idx,
@@ -548,10 +542,8 @@ class SAM2CameraPredictor(SAM2Base):
     ):
         self.frame_idx += 1
         if not self.condition_state["tracking_has_started"]:
-            print("Please call 'load_first_frame' first to load the first frame.")
             self.propagate_in_video_preflight()
 
-        print("cond_frame_outputs ", self.condition_state["output_dict"])
         img, _, _ = self.perpare_data(img, image_size=self.image_size)
 
         output_dict = self.condition_state["output_dict"]
@@ -567,7 +559,6 @@ class SAM2CameraPredictor(SAM2Base):
             feat_sizes,
         ) = self._get_feature(img, batch_size)
 
-        print("feat len ", len(current_vision_feats))
 
         current_out = self.track_step(
             frame_idx=self.frame_idx,
@@ -621,15 +612,9 @@ class SAM2CameraPredictor(SAM2Base):
         reverse=False,
     ):
         """Propagate the input points across frames to track in the entire video."""
-        import time
 
-        t1 = time.time()
-
-        print("preprocess before"["output_dict"])
         self.propagate_in_video_preflight(self.condition_state)
-        print("preprocess time: ", time.time() - t1)
 
-        print(self.condition_state["output_dict"])
         output_dict = self.condition_state["output_dict"]
         consolidated_frame_inds = self.condition_state["consolidated_frame_inds"]
         obj_ids = self.condition_state["obj_ids"]
@@ -645,7 +630,6 @@ class SAM2CameraPredictor(SAM2Base):
         if start_frame_idx is None:
             # default: start from the earliest frame with input points
             start_frame_idx = min(output_dict["cond_frame_outputs"])
-            print("start_frame_idx: ", start_frame_idx)
         if max_frame_num_to_track is None:
             # default: track all the frames in the video
             max_frame_num_to_track = num_frames
@@ -671,21 +655,15 @@ class SAM2CameraPredictor(SAM2Base):
                 current_out = output_dict[storage_key][frame_idx]
                 pred_masks = current_out["pred_masks"]
                 if clear_non_cond_mem:
-                    print("a000")
                     # clear non-conditioning memory of the surrounding frames
                     self._clear_non_cond_mem_around_input(frame_idx)
 
-                print("a000")
             elif frame_idx in consolidated_frame_inds["non_cond_frame_outputs"]:
                 storage_key = "non_cond_frame_outputs"
                 current_out = output_dict[storage_key][frame_idx]
                 pred_masks = current_out["pred_masks"]
-                print("a111")
             else:
                 storage_key = "non_cond_frame_outputs"
-                import time
-
-                # t1=time.time()
                 current_out, pred_masks = self._run_single_frame_inference(
                     output_dict=output_dict,
                     frame_idx=frame_idx,
@@ -697,7 +675,7 @@ class SAM2CameraPredictor(SAM2Base):
                     run_mem_encoder=True,
                 )
                 output_dict[storage_key][frame_idx] = current_out
-                # print("cost time: ", time.time()-t1)
+
             # Create slices of per-object outputs for subsequent interaction with each
             # individual object after tracking.
             self._add_output_per_object(frame_idx, current_out, storage_key)
@@ -781,7 +759,6 @@ class SAM2CameraPredictor(SAM2Base):
             image = (
                 self.condition_state["images"][frame_idx].cuda().float().unsqueeze(0)
             )
-            print("image size ", image.shape)
             backbone_out = self.forward_image(image)
             # Cache the most recent frame's feature (for repeated interactions with
             # a frame; we can use an LRU cache for more frames in the future).
@@ -803,7 +780,6 @@ class SAM2CameraPredictor(SAM2Base):
 
         features = self._prepare_backbone_features(expanded_backbone_out)
         features = (expanded_image,) + features
-        print("feat size ", features[0].shape)
         return features
 
     def _get_feature(self, img, batch_size):
@@ -848,7 +824,6 @@ class SAM2CameraPredictor(SAM2Base):
             feat_sizes,
         ) = self._get_image_feature(frame_idx, batch_size)
 
-        print("feat len ", len(current_vision_feats))
         # point and mask should not appear as input simultaneously on the same frame
         assert point_inputs is None or mask_inputs is None
         current_out = self.track_step(
