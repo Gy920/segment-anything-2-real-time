@@ -1,6 +1,5 @@
 # segment-anything-2 real-time
-
-Run Segment Anything Model 2 on a live video stream
+Run Segment Anything Model 2 on a **live video stream**
 
 ## Demos
 
@@ -49,10 +48,9 @@ if_init = False
 with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
     while True:
         ret, frame = cap.read()
-        width, height = frame.shape[:2][::-1]
-
         if not ret:
             break
+        width, height = frame.shape[:2][::-1]
 
         if not if_init:
             predictor.load_first_frame(frame)
