@@ -2,8 +2,8 @@ import os
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from PIL import Image
 import cv2
+import imageio
 
 
 # use bfloat16 for the entire notebook
@@ -25,16 +25,15 @@ predictor = build_sam2_camera_predictor(model_cfg, sam2_checkpoint)
 
 
 cap = cv2.VideoCapture("../assets/blackswan.mp4")
-
 if_init = False
+# frame_list = []
 
 while True:
     ret, frame = cap.read()
-    width, height = frame.shape[:2][::-1]
-
     if not ret:
         break
 
+    width, height = frame.shape[:2][::-1]
     if not if_init:
         predictor.load_first_frame(frame)
         if_init = True
@@ -42,15 +41,16 @@ while True:
         ann_frame_idx = 0  # the frame index we interact with
         ann_obj_id = 2  # give a unique id to each object we interact with (it can be any integers)
         # Let's add a positive click at (x, y) = (210, 350) to get started
-        points = np.array([[376, 325]], dtype=np.float32)
+        points = np.array([[195, 267], [376, 325], [469, 114]], dtype=np.float32)
         # for labels, `1` means positive click and `0` means negative click
-        labels = np.array([1], np.int32)
+        labels = np.array([1, 1, 1], np.int32)
         _, out_obj_ids, out_mask_logits = predictor.add_new_points(
             frame_idx=ann_frame_idx,
             obj_id=ann_obj_id,
             points=points,
             labels=labels,
         )
+        # continue
 
     else:
         out_obj_ids, out_mask_logits = predictor.track(frame)
@@ -65,8 +65,15 @@ while True:
             all_mask = cv2.bitwise_or(all_mask, out_mask)
 
         print(all_mask.shape, type(all_mask))
-        frame = cv2.bitwise_and(frame, frame, mask=out_mask)
+
+        all_mask = cv2.cvtColor(all_mask, cv2.COLOR_GRAY2BGR)
+        frame = cv2.addWeighted(frame, 1, all_mask, 0.5, 0)
 
     cv2.imshow("frame", frame)
-    if cv2.waitKey(0) & 0xFF == ord("q"):
+
+    # frame_list.append(frame)
+    if cv2.waitKey(1) & 0xFF == ord("q"):
         break
+
+cap.release()
+# gif = imageio.mimsave("./result.gif", frame_list, "GIF", duration=0.00085)
