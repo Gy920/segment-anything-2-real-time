@@ -24,7 +24,7 @@ model_cfg = "sam2_hiera_s.yaml"
 predictor = build_sam2_camera_predictor(model_cfg, sam2_checkpoint)
 
 
-cap = cv2.VideoCapture("../assets/blackswan.mp4")
+cap = cv2.VideoCapture("../notebooks/videos/blackswan/blackswan.mp4")
 if_init = False
 # frame_list = []
 
