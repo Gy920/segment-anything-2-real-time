@@ -1,7 +1,7 @@
 # segment-anything-2 real-time
 Run Segment Anything Model 2 on a **live video stream**
 
-# News
+## News
 - 20/08/2024 : Fix management of ```non_cond_frame_outputs``` for better performance and add bbox prompt
 
 ## Demos
