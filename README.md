@@ -1,10 +1,11 @@
 # segment-anything-2 real-time
 Run Segment Anything Model 2 on a **live video stream**
 
+# News
+- 20/08/2024 : Fix management of ```non_cond_frame_outputs``` for better performance and add bbox prompt
+
 ## Demos
-
 <div align=center>
-
 <p align="center">
 <img src="./assets/blackswan.gif" width="880">
 </p>
@@ -55,7 +56,7 @@ with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
         if not if_init:
             predictor.load_first_frame(frame)
             if_init = True
-            _, out_obj_ids, out_mask_logits = predictor.add_new_points(<your promot >)
+            _, out_obj_ids, out_mask_logits = predictor.add_new_prompt(<your promot >)
 
         else:
             out_obj_ids, out_mask_logits = predictor.track(frame)

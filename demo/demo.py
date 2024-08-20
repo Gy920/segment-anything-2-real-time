@@ -45,12 +45,12 @@ while True:
         # Let's add a positive click at (x, y) = (210, 350) to get started
 
         # for labels, `1` means positive click and `0` means negative click
-        points = np.array([[660, 267]], dtype=np.float32)
-        labels = np.array([1], dtype=np.int32)
+        # points = np.array([[660, 267]], dtype=np.float32)
+        # labels = np.array([1], dtype=np.int32)
 
-        _, out_obj_ids, out_mask_logits = predictor.add_new_prompt(
-            frame_idx=ann_frame_idx, obj_id=ann_obj_id, points=points, labels=labels
-        )
+        # _, out_obj_ids, out_mask_logits = predictor.add_new_prompt(
+        #     frame_idx=ann_frame_idx, obj_id=ann_obj_id, points=points, labels=labels
+        # )
 
         # add bbox
         bbox = np.array([[600, 214], [765, 286]], dtype=np.float32)
