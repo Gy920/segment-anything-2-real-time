@@ -849,7 +849,7 @@ class SAM2CameraPredictor(SAM2Base):
     @torch.inference_mode()
     def reset_state(self):
         """Remove all input points or mask in all frames throughout the video."""
-        self._reset_tracking_results(self.condition_state)
+        self._reset_tracking_results()
         # Remove all object ids
         self.condition_state["obj_id_to_idx"].clear()
         self.condition_state["obj_idx_to_id"].clear()
