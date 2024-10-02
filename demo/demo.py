@@ -25,14 +25,16 @@ predictor = build_sam2_camera_predictor(model_cfg, sam2_checkpoint)
 
 
 cap = cv2.VideoCapture("../notebooks/videos/aquarium/aquarium.mp4")
+
 if_init = False
 
 
 while True:
     ret, frame = cap.read()
-    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     if not ret:
         break
+
+    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
     width, height = frame.shape[:2][::-1]
     if not if_init:
@@ -44,7 +46,8 @@ while True:
         ann_obj_id = 1  # give a unique id to each object we interact with (it can be any integers)
         # Let's add a positive click at (x, y) = (210, 350) to get started
 
-        # for labels, `1` means positive click and `0` means negative click
+
+        ##! add points, `1` means positive click and `0` means negative click
         # points = np.array([[660, 267]], dtype=np.float32)
         # labels = np.array([1], dtype=np.int32)
 
@@ -52,11 +55,20 @@ while True:
         #     frame_idx=ann_frame_idx, obj_id=ann_obj_id, points=points, labels=labels
         # )
 
-        # add bbox
+        ## ! add bbox
         bbox = np.array([[600, 214], [765, 286]], dtype=np.float32)
         _, out_obj_ids, out_mask_logits = predictor.add_new_prompt(
             frame_idx=ann_frame_idx, obj_id=ann_obj_id, bbox=bbox
         )
+
+        ##! add mask
+        # mask_img_path="../notebooks/masks/aquarium/aquarium_mask.png"
+        # mask = cv2.imread(mask_img_path, cv2.IMREAD_GRAYSCALE)
+        # mask = mask / 255
+
+        # _, out_obj_ids, out_mask_logits = predictor.add_new_mask(
+        #     frame_idx=ann_frame_idx, obj_id=ann_obj_id, mask=mask
+        # )
 
     else:
         out_obj_ids, out_mask_logits = predictor.track(frame)
