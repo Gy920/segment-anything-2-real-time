@@ -202,20 +202,26 @@ class SAM2CameraPredictor(SAM2Base):
             bbox is not None or points is not None
         ), "Either bbox or points is required"
 
-        if bbox is not None:
-            if not isinstance(bbox, torch.Tensor):
-                points = torch.tensor(bbox, dtype=torch.float32)
-            labels = torch.tensor([2, 3], dtype=torch.int32)
-        else:
-            if not isinstance(points, torch.Tensor):
-                points = torch.tensor(points, dtype=torch.float32)
-            if not isinstance(labels, torch.Tensor):
-                labels = torch.tensor(labels, dtype=torch.int32)
+        if points is None:
+            points = torch.zeros(0, 2, dtype=torch.float32)
+        elif not isinstance(points, torch.Tensor):
+            points = torch.tensor(points, dtype=torch.float32)
+        if labels is None:
+            labels = torch.zeros(0, dtype=torch.int32)
+        elif not isinstance(labels, torch.Tensor):
+            labels = torch.tensor(labels, dtype=torch.int32)
         if points.dim() == 2:
             points = points.unsqueeze(0)  # add batch dimension
         if labels.dim() == 1:
             labels = labels.unsqueeze(0)  # add batch dimension
-
+        if bbox is not None:
+            if not isinstance(bbox, torch.Tensor):
+                    bbox = torch.tensor(bbox, dtype=torch.float32, device=points.device)
+                    box_coords = bbox.reshape(1, 2, 2)
+                    box_labels = torch.tensor([2, 3], dtype=torch.int32, device=labels.device)
+                    box_labels = box_labels.reshape(1, 2)
+                    points = torch.cat([box_coords, points], dim=1)
+                    labels = torch.cat([box_labels, labels], dim=1)
         if normalize_coords:
             video_H = self.condition_state["video_height"]
             video_W = self.condition_state["video_width"]
