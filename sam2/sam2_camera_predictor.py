@@ -11,7 +11,7 @@ import torch
 from tqdm import tqdm
 
 from sam2.modeling.sam2_base import NO_OBJ_SCORE, SAM2Base
-from sam2.utils.misc import concat_points, fill_holes_in_mask_scores, load_video_frames
+from sam2.utils.misc import concat_points, fill_holes_in_mask_scores
 import numpy as np
 import cv2
 
@@ -216,12 +216,14 @@ class SAM2CameraPredictor(SAM2Base):
             labels = labels.unsqueeze(0)  # add batch dimension
         if bbox is not None:
             if not isinstance(bbox, torch.Tensor):
-                    bbox = torch.tensor(bbox, dtype=torch.float32, device=points.device)
-                    box_coords = bbox.reshape(1, 2, 2)
-                    box_labels = torch.tensor([2, 3], dtype=torch.int32, device=labels.device)
-                    box_labels = box_labels.reshape(1, 2)
-                    points = torch.cat([box_coords, points], dim=1)
-                    labels = torch.cat([box_labels, labels], dim=1)
+                bbox = torch.tensor(bbox, dtype=torch.float32, device=points.device)
+                box_coords = bbox.reshape(1, 2, 2)
+                box_labels = torch.tensor(
+                    [2, 3], dtype=torch.int32, device=labels.device
+                )
+                box_labels = box_labels.reshape(1, 2)
+                points = torch.cat([box_coords, points], dim=1)
+                labels = torch.cat([box_labels, labels], dim=1)
         if normalize_coords:
             video_H = self.condition_state["video_height"]
             video_W = self.condition_state["video_width"]
@@ -568,6 +570,14 @@ class SAM2CameraPredictor(SAM2Base):
                 dtype=torch.float32,
                 device=self.condition_state["device"],
             ),
+            "object_score_logits": torch.full(
+                size=(batch_size, 1),
+                # default to 10.0 for object_score_logits, i.e. assuming the object is
+                # present as sigmoid(10)=1, same as in `predict_masks` of `MaskDecoder`
+                fill_value=10.0,
+                dtype=torch.float32,
+                device=self.condition_state["device"],
+            ),
         }
         empty_mask_ptr = None
         for obj_idx in range(batch_size):
@@ -612,6 +622,9 @@ class SAM2CameraPredictor(SAM2Base):
                 )
                 consolidated_pred_masks[obj_idx : obj_idx + 1] = resized_obj_mask
             consolidated_out["obj_ptr"][obj_idx : obj_idx + 1] = out["obj_ptr"]
+            consolidated_out["object_score_logits"][obj_idx : obj_idx + 1] = out[
+                "object_score_logits"
+            ]
 
         # Optionally, apply non-overlapping constraints on the consolidated scores
         # and rerun the memory encoder
@@ -629,6 +642,7 @@ class SAM2CameraPredictor(SAM2Base):
                 frame_idx=frame_idx,
                 batch_size=batch_size,
                 high_res_masks=high_res_masks,
+                object_score_logits=consolidated_out["object_score_logits"],
                 is_mask_from_pts=True,  # these frames are what the user interacted with
             )
             consolidated_out["maskmem_features"] = maskmem_features
@@ -743,6 +757,33 @@ class SAM2CameraPredictor(SAM2Base):
         ].values():
             input_frames_inds.update(mask_inputs_per_frame.keys())
         assert all_consolidated_frame_inds == input_frames_inds
+
+    def add_new_promot_during_track(
+        self, point=None, bbox=None, mask=None, if_new_target=True
+    ):
+        assert (
+            self.condition_state["tracking_has_started"] == True
+        ), "Cannot add new points or mask during tracking without calling "
+
+        self.condition_state["tracking_has_started"] = False
+
+        obj_id = self.condition_state["obj_ids"][-1] + 1 if if_new_target else self.condition_state["obj_ids"][-1]
+        frame_idx = 0
+
+        print("shape ",len(self.condition_state["images"])," frame idex ",frame_idx)
+        if point is not None or bbox is not None:
+            self.add_new_prompt(
+                frame_idx,
+                obj_id,
+                points=point,
+                bbox=bbox,
+                clear_old_points=False,
+                normalize_coords=True,
+            )
+        else:
+            self.add_new_mask(frame_idx, obj_id, mask)
+
+
 
     @torch.inference_mode()
     def track(
@@ -930,6 +971,7 @@ class SAM2CameraPredictor(SAM2Base):
                 "maskmem_pos_enc": None,
                 "pred_masks": current_out["pred_masks"][obj_slice],
                 "obj_ptr": current_out["obj_ptr"][obj_slice],
+                "object_score_logits": current_out["object_score_logits"][obj_slice],
             }
             if maskmem_features is not None:
                 obj_out["maskmem_features"] = maskmem_features[obj_slice]
@@ -1081,17 +1123,19 @@ class SAM2CameraPredictor(SAM2Base):
         maskmem_pos_enc = self._get_maskmem_pos_enc(current_out)
         # object pointer is a small tensor, so we always keep it on GPU memory for fast access
         obj_ptr = current_out["obj_ptr"]
+        object_score_logits = current_out["object_score_logits"]
         # make a compact version of this frame's output to reduce the state size
         compact_current_out = {
             "maskmem_features": maskmem_features,
             "maskmem_pos_enc": maskmem_pos_enc,
             "pred_masks": pred_masks,
             "obj_ptr": obj_ptr,
+            "object_score_logits": object_score_logits,
         }
         return compact_current_out, pred_masks_gpu
 
     def _run_memory_encoder(
-        self, frame_idx, batch_size, high_res_masks, is_mask_from_pts
+        self, frame_idx, batch_size, high_res_masks,object_score_logits, is_mask_from_pts
     ):
         """
         Run the memory encoder on `high_res_masks`. This is usually after applying
@@ -1106,6 +1150,7 @@ class SAM2CameraPredictor(SAM2Base):
             current_vision_feats=current_vision_feats,
             feat_sizes=feat_sizes,
             pred_masks_high_res=high_res_masks,
+            object_score_logits=object_score_logits,
             is_mask_from_pts=is_mask_from_pts,
         )
 
