@@ -16,7 +16,7 @@ from torch import nn
 class PositionEmbeddingSine(nn.Module):
     """
     This is a more standard version of the position embedding, very similar to the one
-    used by the Attention is all you need paper, generalized to work on images.
+    used by the Attention Is All You Need paper, generalized to work on images.
     """
 
     def __init__(
@@ -25,6 +25,11 @@ class PositionEmbeddingSine(nn.Module):
         temperature: int = 10000,
         normalize: bool = True,
         scale: Optional[float] = None,
+        # Following settings only relevant
+        # for warmping up cache for compilation
+        warmup_cache: bool = True,
+        image_size: int = 1024,
+        strides: Tuple[int] = (4, 8, 16, 32),
     ):
         super().__init__()
         assert num_pos_feats % 2 == 0, "Expecting even model width"
@@ -38,6 +43,12 @@ class PositionEmbeddingSine(nn.Module):
         self.scale = scale
 
         self.cache = {}
+        if warmup_cache and torch.cuda.is_available():
+            # Warmup cache for cuda, to help with compilation
+            device = torch.device("cuda")
+            for stride in strides:
+                cache_key = (image_size // stride, image_size // stride)
+                self._pe(1, device, *cache_key)
 
     def _encode_xy(self, x, y):
         # The positions are expected to be normalized
@@ -76,19 +87,19 @@ class PositionEmbeddingSine(nn.Module):
         return pos
 
     @torch.no_grad()
-    def forward(self, x: torch.Tensor):
-        cache_key = (x.shape[-2], x.shape[-1])
+    def _pe(self, B, device, *cache_key):
+        H, W = cache_key
         if cache_key in self.cache:
-            return self.cache[cache_key][None].repeat(x.shape[0], 1, 1, 1)
+            return self.cache[cache_key].to(device)[None].repeat(B, 1, 1, 1)
         y_embed = (
-            torch.arange(1, x.shape[-2] + 1, dtype=torch.float32, device=x.device)
+            torch.arange(1, H + 1, dtype=torch.float32, device=device)
             .view(1, -1, 1)
-            .repeat(x.shape[0], 1, x.shape[-1])
+            .repeat(B, 1, W)
         )
         x_embed = (
-            torch.arange(1, x.shape[-1] + 1, dtype=torch.float32, device=x.device)
+            torch.arange(1, W + 1, dtype=torch.float32, device=device)
             .view(1, 1, -1)
-            .repeat(x.shape[0], x.shape[-2], 1)
+            .repeat(B, H, 1)
         )
 
         if self.normalize:
@@ -96,7 +107,7 @@ class PositionEmbeddingSine(nn.Module):
             y_embed = y_embed / (y_embed[:, -1:, :] + eps) * self.scale
             x_embed = x_embed / (x_embed[:, :, -1:] + eps) * self.scale
 
-        dim_t = torch.arange(self.num_pos_feats, dtype=torch.float32, device=x.device)
+        dim_t = torch.arange(self.num_pos_feats, dtype=torch.float32, device=device)
         dim_t = self.temperature ** (2 * (dim_t // 2) / self.num_pos_feats)
 
         pos_x = x_embed[:, :, :, None] / dim_t
@@ -111,6 +122,11 @@ class PositionEmbeddingSine(nn.Module):
         self.cache[cache_key] = pos[0]
         return pos
 
+    @torch.no_grad()
+    def forward(self, x: torch.Tensor):
+        B = x.shape[0]
+        cache_key = (x.shape[-2], x.shape[-1])
+        return self._pe(B, x.device, *cache_key)
 
 class PositionEmbeddingRandom(nn.Module):
     """
@@ -211,6 +227,11 @@ def apply_rotary_enc(
     # repeat freqs along seq_len dim to match k seq_len
     if repeat_freqs_k:
         r = xk_.shape[-2] // xq_.shape[-2]
-        freqs_cis = freqs_cis.repeat(*([1] * (freqs_cis.ndim - 2)), r, 1)
+        if freqs_cis.is_cuda:
+            freqs_cis = freqs_cis.repeat(*([1] * (freqs_cis.ndim - 2)), r, 1)
+        else:
+            # torch.repeat on complex numbers may not be supported on non-CUDA devices
+            # (freqs_cis has 4 dims and we repeat on dim 2) so we use expand + flatten
+            freqs_cis = freqs_cis.unsqueeze(2).expand(-1, -1, r, -1, -1).flatten(2, 3)
     xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(3)
     return xq_out.type_as(xq).to(xq.device), xk_out.type_as(xk).to(xk.device)

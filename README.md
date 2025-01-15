@@ -64,6 +64,14 @@ with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
             ...
 ```
 
+### With model compilation
+
+You can use the `vos_inference` argument in the `build_sam2_camera_predictor` function to enable model compilation. The inference may be slow for the first few execution as the model gets warmed up, but should result in significant inference speed improvement. 
+
+We provide the modified config file `sam2/configs/sam2.1/sam2.1_hiera_t_512.yaml`, with the modifications necessary to run SAM2 at a 512x512 resolution. Notably the parameters that need to be changed are highlighted in the config file at lines 24, 43, 54 and 89.
+
+We provide the file `sam2/benchmark.py` to test the speed gain from using the model compilation.
+
 ## References:
 
 - SAM2 Repository: https://github.com/facebookresearch/sam2
