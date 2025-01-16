@@ -29,7 +29,7 @@ if torch.cuda.get_device_properties(0).major >= 8:
 
 # Config and checkpoint
 sam2_checkpoint = "checkpoints/sam2.1_hiera_tiny.pt"
-model_cfg = "configs/sam2.1/sam2.1_hiera_t_512.yaml"
+model_cfg = "configs/sam2.1/sam2.1_hiera_t_512"
 
 # Build video predictor with vos_optimized=True setting
 predictor = build_sam2_camera_predictor(

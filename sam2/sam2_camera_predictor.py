@@ -1218,37 +1218,44 @@ class SAM2CameraPredictorVOS(SAM2CameraPredictor):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.compile_memory_encoder = kwargs.get("compile_memory_encoder", False)
+        self.compile_memory_attention = kwargs.get("compile_memory_attention", False)
+        self.compile_prompt_encoder = kwargs.get("compile_prompt_encoder", False)
+        self.compile_mask_decoder = kwargs.get("compile_mask_decoder", False)
         self._compile_all_components()
 
     def _compile_all_components(self):
         print("Compiling all components for VOS setting. First time may be very slow.")
-        self.memory_encoder.forward = torch.compile(
-            self.memory_encoder.forward,
-            mode="max-autotune",
-            fullgraph=True,
-            dynamic=False,
-        )
-
-        self.memory_attention.forward = torch.compile(
-            self.memory_attention.forward,
-            mode="max-autotune",
-            fullgraph=True,
-            dynamic=True,  # Num. of memories varies
-        )
-
-        self.sam_prompt_encoder.forward = torch.compile(
-            self.sam_prompt_encoder.forward,
-            mode="max-autotune",
-            fullgraph=True,
-            dynamic=False,  # Accuracy regression on True
-        )
-
-        self.sam_mask_decoder.forward = torch.compile(
-            self.sam_mask_decoder.forward,
-            mode="max-autotune",
-            fullgraph=True,
-            dynamic=False,  # Accuracy regression on True
-        )
+        if self.compile_memory_encoder:
+            print("Compiling memory encoder...")
+            self.memory_encoder.forward = torch.compile(
+                self.memory_encoder.forward,
+                mode="max-autotune",
+                fullgraph=True,
+                dynamic=False,
+            )
+        if self.compile_memory_attention:
+            print("Compiling memory attention...")
+            self.memory_attention.forward = torch.compile(
+                self.memory_attention.forward,
+                mode="max-autotune",
+                fullgraph=True,
+                dynamic=True,
+            )
+        if self.compile_prompt_encoder:
+            self.sam_prompt_encoder.forward = torch.compile(
+                self.sam_prompt_encoder.forward,
+                mode="max-autotune",
+                fullgraph=True,
+                dynamic=False,  # Accuracy regression on True
+            )
+        if self.compile_mask_decoder:
+            self.sam_mask_decoder.forward = torch.compile(
+                self.sam_mask_decoder.forward,
+                mode="max-autotune",
+                fullgraph=True,
+                dynamic=False,  # Accuracy regression on True
+            )
 
     def forward_image(self, img_batch: torch.Tensor):
         """

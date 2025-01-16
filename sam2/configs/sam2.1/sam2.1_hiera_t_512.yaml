@@ -117,6 +117,11 @@ model:
   multimask_min_pt_num: 0
   multimask_max_pt_num: 1
   use_mlp_for_obj_ptr_proj: true
-  # Compilation flag
-  # HieraT does not currently support compilation, should always be set to False
-  compile_image_encoder: False
+
+  # compilation settings
+  compile_image_encoder: True
+  compile_memory_encoder: True
+  compile_memory_attention: True
+  compile_prompt_encoder: False
+  compile_mask_decoder: False
+
