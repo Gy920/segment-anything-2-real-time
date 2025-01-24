@@ -21,6 +21,7 @@ model:
         normalize: true
         scale: null
         temperature: 10000
+        image_size: 512 # set this to the internal image resolution
       d_model: 256
       backbone_channel_list: [768, 384, 192, 96]
       fpn_top_down_levels: [2, 3]  # output level 0 and 1 directly use the backbone features
@@ -39,7 +40,7 @@ model:
       self_attention:
         _target_: sam2.modeling.sam.transformer.RoPEAttention
         rope_theta: 10000.0
-        feat_sizes: [64, 64]
+        feat_sizes: [32, 32] # [32, 32] for 512x512 input, [64, 64] for 1024x1024 input
         embedding_dim: 256
         num_heads: 1
         downsample_rate: 1
@@ -50,7 +51,7 @@ model:
       cross_attention:
         _target_: sam2.modeling.sam.transformer.RoPEAttention
         rope_theta: 10000.0
-        feat_sizes: [64, 64]
+        feat_sizes: [32, 32] # [32, 32] for 512x512 input, [64, 64] for 1024x1024 input
         rope_k_repeat: True
         embedding_dim: 256
         num_heads: 1
@@ -85,7 +86,7 @@ model:
         num_layers: 2
 
   num_maskmem: 7
-  image_size: 1024
+  image_size: 512 # set this to the internal image resolution
   # apply scaled sigmoid on mask logits for memory encoder, and directly feed input mask as output mask
   # SAM decoder
   sigmoid_scale_for_mem_enc: 20.0
@@ -116,6 +117,11 @@ model:
   multimask_min_pt_num: 0
   multimask_max_pt_num: 1
   use_mlp_for_obj_ptr_proj: true
-  # Compilation flag
-  # HieraT does not currently support compilation, should always be set to False
-  compile_image_encoder: False
+
+  # compilation settings
+  compile_image_encoder: True
+  compile_memory_encoder: True
+  compile_memory_attention: True
+  compile_prompt_encoder: False
+  compile_mask_decoder: False
+
